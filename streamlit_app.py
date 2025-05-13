@@ -1,6 +1,614 @@
 import streamlit as st
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.cluster import DBSCAN
+from sklearn.manifold import TSNE
+from sklearn.metrics import silhouette_score, davies_bouldin_score
 
-st.title("🎈 My new app")
-st.write(
-    "Let's start building! For help and inspiration, head over to [docs.streamlit.io](https://docs.streamlit.io/)."
-)
+# Fungsi untuk menampilkan tabel
+def display_dataframe(df):
+    st.write(df)
+
+# Halaman Dashboard
+def dashboard():
+    # Menampilkan judul dengan rata tengah
+    st.markdown("""
+        <h1 style="text-align: center; font-size: 50px">Sistem Klasterisasi UMKM di Kabupaten Sidoarjo menggunakan DBSCAN berbasis Perbandingan Jarak</h1>
+    """, unsafe_allow_html=True)
+
+    # Menambahkan garis
+    st.markdown("""
+        <hr style="border: 1px solid #DBDBDB; width: 100%; margin-top: 10px; margin-bottom: 20px;">
+    """, unsafe_allow_html=True)
+
+    # Menampilkan Gambar dari Folder ./dataset/
+    image_path = 'umkm.jpg'
+    st.image(image_path, use_container_width=True)
+
+    # Menambahkan garis
+    st.markdown("""
+        <hr style="border: 1px solid #DBDBDB; width: 100%; margin-top: 10px; margin-bottom: 20px;">
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+        <p style="text-align: justify;">
+            Selamat datang di aplikasi sistem klasterisasi UMKM di Kabupaten Sidoarjo.
+            Project ini bertujuan untuk mengelompokkan Usaha Mikro, Kecil, dan Menengah (UMKM)
+            menggunakan algoritma DBSCAN berbasis perbandingan jarak untuk membantu mengidentifikasi
+            pola dan struktur dalam data UMKM yang ada di Sidoarjo.
+        </p>
+    """, unsafe_allow_html=True)
+
+    # Langkah-langkah Penggunaan
+    st.markdown("""
+    <div style="background-color: #d0e7f7; font-size: 20px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+        <strong>&nbsp;&nbsp;Langkah-langkah Penggunaan</strong>
+    </div>
+    """ , unsafe_allow_html=True)
+    st.write("""
+        1. **Masukkan Data UMKM**: Unggah file data UMKM yang akan digunakan.
+        2. **Preprocessing Data**: Lakukan transformasi data, penanganan outlier, dan normalisasi data.
+        3. **Modeling & Evaluasi**: Pilih jarak dan lakukan klasterisasi menggunakan algoritma DBSCAN.
+        4. **Analisa Klaster**: Lihat hasil analisis data.
+    """)
+    st.write("")
+    # # Tombol Mulai
+    # if st.button("Mulai Proses"):
+    #     st.write("Silakan lanjutkan ke menu untuk mengunggah data.")
+
+    # Tentang Pengembang
+    st.markdown("""
+    <div style="background-color: #d0e7f7; font-size: 20px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+        <strong>&nbsp;&nbsp;Tentang Pengembang</strong>
+    </div>
+    """ , unsafe_allow_html=True)
+    st.write("""
+        Aplikasi ini dikembangkan oleh Mochammad Syahrul Abidin, dibimbing oleh Dr. Yeni Kustiyahningsih, S.Kom., M.Kom 
+        dan Eza Rahmanita, S.T., M.T. Tujuan project ini adalah untuk membantu UMKM di Sidoarjo dengan teknologi klasterisasi data.
+    """)
+
+# Halaman Masukkan Data
+def upload_data():
+    st.title("Masukkan Data")
+    file = st.file_uploader("Pilih file .csv atau .xlsx", type=["csv", "xlsx"])
+
+    if file is not None:
+        if file.name.endswith('.csv'):
+            df = pd.read_csv(file)
+        elif file.name.endswith('.xlsx'):
+            df = pd.read_excel(file)
+
+        # Menampilkan informasi dataset
+        st.markdown("""
+        <div style="background-color: #d0e7f7; font-size: 20px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+            <strong>&nbsp;&nbsp;Informasi Dataset</strong>
+        </div>
+        """ , unsafe_allow_html=True)
+        st.markdown("" , unsafe_allow_html=True)
+        st.write()
+        st.write(f"Jumlah Baris: {df.shape[0]} data")
+        st.write(f"Jumlah Kolom: {df.shape[1]} kolom")
+        
+        # Menampilkan informasi kolom kategorikal dan numerik
+        categorical_columns = df.select_dtypes(include=['object']).columns
+        numerical_columns = df.select_dtypes(include=['number']).columns
+
+        st.write(f"Jumlah Kolom Kategorikal: {len(categorical_columns)} kolom")
+        st.write(f"Jumlah Kolom Numerik: {len(numerical_columns)} kolom")
+
+        display_dataframe(df)
+        
+        # Menyimpan dataframe di session state untuk digunakan di halaman lain
+        st.session_state.df = df
+        return df
+    return None
+
+
+# Fungsi untuk Winsorization
+def winsorize(df, cols, limits):
+    df_winsorized = df.copy()
+    for col in cols:
+        if col in df_winsorized.columns and pd.api.types.is_numeric_dtype(df_winsorized[col]):
+            q1, q3 = df_winsorized[col].quantile([0.25, 0.75])
+            iqr_val = q3 - q1
+            lower_bound = q1 - limits * iqr_val
+            upper_bound = q3 + limits * iqr_val
+            df_winsorized[col] = np.clip(df_winsorized[col], lower_bound, upper_bound)
+        else:
+            print(f"Kolom '{col}' tidak ditemukan atau bukan numerik.")
+    return df_winsorized
+
+# Menentukan nilai limits secara langsung
+limits = 1 
+
+# Fungsi untuk menghitung jumlah outlier
+def get_outliers_info(df, cols, limits):
+    outliers_info = {}
+    for col in cols:
+        if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+            q1, q3 = df[col].quantile([0.25, 0.75])
+            iqr_val = q3 - q1
+            lower_bound = q1 - limits * iqr_val
+            upper_bound = q3 + limits * iqr_val
+            lower_outliers = (df[col] < lower_bound).sum()
+            upper_outliers = (df[col] > upper_bound).sum()
+            total_outliers = lower_outliers + upper_outliers
+            outliers_info[col] = {
+                'lower_outliers': lower_outliers,
+                'upper_outliers': upper_outliers,
+                'total_outliers': total_outliers
+            }
+    return outliers_info
+
+def preprocessing_data():
+    st.title("Preprocessing Data")
+
+    # Pastikan bahwa data telah diupload
+    if 'df' not in st.session_state:
+        st.warning("Silakan upload data terlebih dahulu di menu 'Masukkan Data'.")
+        return None  # Jika data belum ada, return None
+    
+    # Ambil data dari session state
+    df = st.session_state.df
+
+    # Sub-menu untuk memilih langkah preprocessing menggunakan radio buttons
+    preprocess_option = st.radio(
+        "Pilih Langkah Preprocessing",
+        ["Transformasi Data", "Outlier Handling", "Normalisasi Data"]
+    )
+
+    # # Menambahkan tombol untuk setiap langkah preprocessing
+    # if preprocess_option == "Data Cleaning":
+    #     st.write("### Data Cleaning")
+    #     if st.button("Lakukan Data Cleaning"):
+    #         # Mengisi nilai yang hilang dengan rata-rata kolom numerik
+    #         df.fillna(df.mean(numeric_only=True), inplace=True)
+    #         st.write("Data setelah mengisi nilai yang hilang dengan rata-rata kolom numerik:")
+    #         display_dataframe(df)
+    #         st.session_state.df = df  # Menyimpan data setelah cleaning
+
+    #         # Mengubah warna tombol setelah ditekan
+    #         st.markdown("""<style> .stButton>button {background-color: #d0e7f7;} </style>""", unsafe_allow_html=True)
+
+    if preprocess_option == "Transformasi Data":
+        st.write("### Transformasi Data")
+        if st.button("Lakukan Transformasi Data"):
+            # Mengubah kolom "NO" menjadi tipe data object
+            if 'NO' in df.columns:
+                df["NO"] = df["NO"].astype(str)
+            
+            # Mengubah "Tidak ada" menjadi string kosong pada kolom 'IZIN USAHA' dan 'MARKETPLACE'
+            if 'IZIN USAHA' in df.columns:
+                df['IZIN USAHA'] = df['IZIN USAHA'].replace(["Tidak ada"], "0")
+            if 'MARKETPLACE' in df.columns:
+                df['MARKETPLACE'] = df['MARKETPLACE'].replace(["Tidak ada"], "0")
+            
+            # Menghitung jumlah izin dan jumlah marketplace setelah pemrosesan
+            if 'IZIN USAHA' in df.columns:
+                df['IZIN USAHA'] = df['IZIN USAHA'].apply(lambda x: len(x.split(',')) if isinstance(x, str) and x != "0" else 0)
+            if 'MARKETPLACE' in df.columns:
+                df['MARKETPLACE'] = df['MARKETPLACE'].apply(lambda x: len(x.split(',')) if isinstance(x, str) and x != "0" else 0)
+            
+            # Menyimpan salinan data asli
+            st.session_state.original_df = df.copy()
+            st.markdown("""
+                <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+                   <strong>&nbsp;&nbsp;Data setelah transformasi</strong>
+                </div>
+                """ , unsafe_allow_html=True)
+            st.write("")
+
+            display_dataframe(df)
+            st.session_state.df = df  # Menyimpan data setelah transformasi
+
+    elif preprocess_option == "Outlier Handling":
+        st.write("### Outlier Handling")
+        if st.button("Lakukan Outlier Handling"):
+            # Pilih kolom numerik untuk Winsorization
+            numerical_columns = df.select_dtypes(include=[np.number]).columns.tolist()
+            
+            # Winsorization pada kolom numerik
+            df_winsorized = winsorize(df, numerical_columns, limits)
+            
+            # Menampilkan jumlah outlier sebelum Winsorization
+            outliers_info_before = get_outliers_info(df, numerical_columns, limits)
+            st.markdown("""
+                <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+                   <strong>&nbsp;&nbsp;Data outlier sebelum Winsorization</strong>
+                </div>
+                """ , unsafe_allow_html=True)
+            st.write("")
+            st.write(outliers_info_before)
+
+            # Menampilkan jumlah outlier setelah Winsorization
+            outliers_info_after = get_outliers_info(df_winsorized, numerical_columns, limits)
+            st.markdown("""
+                <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+                   <strong>&nbsp;&nbsp;Data outlier setelah Winsorization</strong>
+                </div>
+                """ , unsafe_allow_html=True)
+            st.write("")
+            st.write(outliers_info_after)
+
+            # Visualisasi Boxplot Sebelum dan Sesudah Winsorization
+            fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+            sns.boxplot(data=df[numerical_columns], ax=axes[0])
+            axes[0].set_title('Sebelum Winsorization')
+            axes[0].tick_params(axis='x', rotation=45)
+
+            sns.boxplot(data=df_winsorized[numerical_columns], ax=axes[1])
+            axes[1].set_title('Setelah Winsorization')
+            axes[1].tick_params(axis='x', rotation=45)
+
+            plt.tight_layout()
+            st.pyplot(fig)
+
+            st.session_state.df = df_winsorized  # Menyimpan data setelah Winsorization
+
+    elif preprocess_option == "Normalisasi Data":
+        st.write("### Normalisasi Data")
+        if st.button("Lakukan Normalisasi MaxAbs"):
+            # Memastikan data sudah diupload
+            if 'df' not in st.session_state:
+                st.warning("Silakan upload data terlebih dahulu di menu 'Masukkan Data'.")
+                return None
+
+            # Ambil data dari session state
+            df = st.session_state.df
+
+            # Pilih kolom numerik untuk normalisasi
+            numerical_columns = df.select_dtypes(include=[np.number]).columns.tolist()
+
+            # Normalisasi data menggunakan MaxAbs untuk Euclidean
+            df_euclidean = df.copy()
+            for col in numerical_columns:
+                if col in df_euclidean.columns:
+                    df_euclidean[col] = df_euclidean[col] / df_euclidean[col].max()
+
+            # Menyimpan hasil normalisasi Euclidean di session state
+            st.session_state.df_euclidean = df_euclidean
+
+            # Normalisasi data menggunakan MaxAbs untuk Manhattan
+            df_manhattan = df.copy()
+            for col in numerical_columns:
+                if col in df_manhattan.columns:
+                    df_manhattan[col] = df_manhattan[col] / df_manhattan[col].max()
+
+            # Menyimpan hasil normalisasi Manhattan di session state
+            st.session_state.df_manhattan = df_manhattan
+
+            # Normalisasi data menggunakan MaxAbs untuk Hamming
+            df_hamming = df.copy()
+            for col in numerical_columns:
+                if col in df_hamming.columns:
+                    df_hamming[col] = df_hamming[col] / df_hamming[col].max()
+
+            # Menyimpan hasil normalisasi Hamming di session state
+            st.session_state.df_hamming = df_hamming
+
+            # Menampilkan data setelah normalisasi
+            st.markdown("""
+                <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+                   <strong>&nbsp;&nbsp;Data setelah normalisasi MaxAbs</strong>
+                </div>
+                """ , unsafe_allow_html=True)
+            st.write("")
+            display_dataframe(df_euclidean)
+
+            # Menyimpan data yang sudah dinormalisasi pada session state
+            st.session_state.df_euclidean = df_euclidean
+            st.session_state.df_manhattan = df_manhattan
+            st.session_state.df_hamming = df_hamming
+
+        return df
+
+def modeling(df, metric):
+    st.title(f"Modeling - DBSCAN Clustering dengan Jarak {metric.capitalize()}")
+
+    # Memastikan data sudah ada di session state
+    if 'df_euclidean' not in st.session_state or 'df_manhattan' not in st.session_state or 'df_hamming' not in st.session_state:
+        st.warning("Silakan lakukan normalisasi terlebih dahulu")
+        return None
+    
+    # Pilih data berdasarkan normalisasi yang dipilih
+    if metric == "euclidean":
+        df_normalized = st.session_state.df_euclidean
+    elif metric == "manhattan":
+        df_normalized = st.session_state.df_manhattan
+    elif metric == "hamming":
+        df_normalized = st.session_state.df_hamming
+    else:
+        st.warning("Pilih jenis normalisasi yang valid.")
+        return None
+
+    # Pilih hanya kolom numerik untuk clustering
+    df_numeric = df_normalized.select_dtypes(include=[np.number])
+
+    if df_numeric.empty:
+        st.error("Tidak ada kolom numerik yang tersedia untuk clustering.")
+        return None
+
+    # Input parameter DBSCAN
+    eps = st.slider("Pilih nilai eps", 0.1, 10.0, 0.5)
+    min_samples = st.slider("Pilih nilai minPts", 1, 100, 5)
+
+    # Melakukan clustering dengan DBSCAN
+    if st.button(f"Lakukan Clustering menggunakan {metric} distance"):
+        dbscan = DBSCAN(eps=eps, min_samples=min_samples, metric=metric.lower())
+        clusters = dbscan.fit_predict(df_numeric)
+    
+    # # Tentukan nilai random_state untuk memastikan hasil yang konsisten
+    # random_state = 42 
+
+    # # Melakukan clustering dengan DBSCAN
+    # if st.button(f"Lakukan Clustering menggunakan {metric} distance"):
+    #     dbscan = DBSCAN(eps=eps, min_samples=min_samples, metric=metric.lower(), random_state=random_state)
+    #     clusters = dbscan.fit_predict(df_numeric)
+
+        # Menambahkan hasil cluster ke data dengan nama kolom sesuai dengan jarak
+        cluster_column_name = f"CLUSTER_{metric.upper()}"
+        df_normalized[cluster_column_name] = clusters
+
+        # Menyimpan hasil clustering dalam session state dengan nama yang sesuai dengan jarak
+        st.session_state[f"df_{metric}"] = df_normalized  # Saving result to session state
+
+        # Menampilkan hasil clustering
+        st.markdown(f"""
+            <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+                <strong>&nbsp;&nbsp;Hasil Clustering menggunakan {metric} distance</strong>
+            </div>
+        """, unsafe_allow_html=True)
+        st.write("")
+        display_dataframe(df_normalized)
+
+        # Memisahkan dan menampilkan setiap cluster
+        unique_clusters = sorted(df_normalized[cluster_column_name].unique())
+        for cluster in unique_clusters:
+            st.write(f"### Cluster {cluster}")
+            cluster_data = df_normalized[df_normalized[cluster_column_name] == cluster]
+            st.markdown(f"""
+                <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+                    <strong>&nbsp;&nbsp;Jumlah data pada Cluster {cluster} sebanyak {cluster_data.shape[0]} data</strong>
+                </div>
+            """, unsafe_allow_html=True)
+            st.write("")
+            st.write(cluster_data)  # Menampilkan deskripsi statistik setiap cluster
+
+        # # Visualisasi hasil t-SNE
+        # tsne = TSNE(n_components=2, perplexity=60, n_iter=1000, metric=metric.lower(), random_state=42)
+        # tsne_result = tsne.fit_transform(df_normalized.select_dtypes(include=[np.number]))
+
+        # # Masukkan hasil ke DataFrame untuk t-SNE
+        # df_tsne = pd.DataFrame(tsne_result, columns=['TSNE1', 'TSNE2'])
+        # df_tsne['Cluster'] = df_normalized[cluster_column_name]
+
+        # # Plot t-SNE
+        # plt.figure(figsize=(10, 6))
+        # sns.scatterplot(
+        #     x='TSNE1', y='TSNE2',
+        #     hue='Cluster',
+        #     palette='tab10',
+        #     data=df_tsne,
+        #     alpha=0.7
+        # )
+        # plt.title(f'Visualisasi 2D Clustering DBSCAN ({metric.capitalize()} Distance) dengan t-SNE')
+        # plt.xlabel('t-SNE Komponen 1')
+        # plt.ylabel('t-SNE Komponen 2')
+        # plt.legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
+        # plt.grid(True)
+        # plt.tight_layout()
+        # st.pyplot(plt)
+
+        return df_normalized
+    return None
+
+def evaluate_model(df, metric):
+    st.title(f"Evaluasi Hasil Clustering ({metric.capitalize()})")
+    
+    if df is not None:
+        # Menentukan nama kolom cluster berdasarkan metric
+        cluster_column = f"CLUSTER_{metric.upper()}"
+        
+        if cluster_column not in df.columns:
+            st.error(f"Kolom {cluster_column} tidak ada. Silakan lakukan clustering terlebih dahulu.")
+            return None
+        
+        # Memfilter data untuk menghindari outlier (cluster == -1)
+        df_valid = df[df[cluster_column] != -1]  # Menghapus baris yang memiliki cluster -1 (outliers)
+        
+        if df_valid.empty:
+            st.error("Semua data merupakan outlier (cluster -1). Tidak dapat dilakukan evaluasi.")
+            return None
+        
+        # Mengecek jumlah cluster valid
+        unique_clusters = df_valid[cluster_column].nunique()
+
+        # Peringatan jika hanya ada 1 cluster
+        if unique_clusters == 1:
+            st.warning("Peringatan: Hanya ada 1 cluster yang terbentuk. Evaluasi SC dan DBI tidak valid karena tidak ada variasi dalam cluster.")
+            return None
+
+        # Menampilkan jumlah data yang dievaluasi
+        num_valid_data = df_valid.shape[0]
+        st.markdown(f"""
+                <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+                    <strong>&nbsp;&nbsp;Jumlah data yang dievaluasi adalah {num_valid_data} data</strong>
+                </div>
+            """, unsafe_allow_html=True)
+        st.write("")
+
+        # Mengambil kolom numerik untuk evaluasi
+        df_numeric = df_valid.select_dtypes(include=[np.number])
+
+        # Evaluasi Silhouette Score dan Davies-Bouldin Index
+        silhouette_avg = silhouette_score(df_numeric, df_valid[cluster_column])
+        dbi = davies_bouldin_score(df_numeric, df_valid[cluster_column])
+
+        st.write(f"Nilai Silhouette Coefficient (SC) untuk {cluster_column} yaitu {silhouette_avg:.2f}")
+        st.write(f"Davies-Bouldin Index (DBI) untuk {cluster_column} yaitu {dbi:.2f}")
+
+        # Tampilkan grafik perbandingan
+        fig, ax = plt.subplots()
+        ax.bar(['Silhouette Coefficient', 'Davies-Bouldin Index'], [silhouette_avg, dbi])
+        ax.set_ylabel('Score')
+        st.pyplot(fig)
+
+        st.title("Hasil Clustering")
+    
+        # Mengambil data asli dari session state
+        if 'original_df' not in st.session_state:
+            st.warning("Silakan upload dan proses data terlebih dahulu.")
+            return
+
+        # Mengambil data asli (sebelum diproses)
+        original_df = st.session_state.original_df
+
+        # Memastikan bahwa kolom cluster ada
+        if cluster_column in df.columns:
+            # Menambahkan kolom cluster ke data asli
+            original_df[cluster_column] = df[cluster_column]
+
+            # Menyimpan data asli yang sudah memiliki kolom cluster dengan nama variabel
+            cluster_data_var_name = f"CLUSTER_{metric.upper()}"
+            st.session_state[cluster_data_var_name] = original_df
+
+            st.markdown("""
+                <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+                    <strong>&nbsp;&nbsp;Data keseluruhan hasil Clustering</strong>
+                </div>
+            """, unsafe_allow_html=True)
+            st.write("")
+            st.write(original_df)  # Menampilkan data asli dengan kolom cluster
+
+            # # Tombol untuk download hasil clustering dalam format CSV
+            # csv = original_df.to_csv(index=False)
+            # download_filename = f"hasil_clustering_{metric.upper()}.csv"
+            # st.download_button("Download Hasil Clustering", csv, download_filename, "text/csv")
+        else:
+            st.write("Silakan lakukan clustering terlebih dahulu.")
+
+def analyze_clusters(df, metric):
+    st.markdown(f"""
+                <div style="background-color: #d0e7f7; font-size: 17px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+                    <strong>&nbsp;&nbsp;Analisa setiap Clustering pada Algoritma DBSCAN pada {metric.capitalize()} Distance</strong>
+                </div>
+            """, unsafe_allow_html=True)
+    st.write("")
+    # Memastikan data asli dengan hasil clustering sudah ada di session state
+    if 'original_df' not in st.session_state:
+        st.write("Data asli dengan hasil clustering tidak ditemukan. Silakan lakukan clustering terlebih dahulu.")
+        return
+
+    # Ambil data asli dengan hasil clustering
+    df_relevant = st.session_state.original_df
+
+    cluster_column = f"CLUSTER_{metric.upper()}"
+
+    # Memastikan kolom cluster sesuai metric ada di dataframe
+    if cluster_column not in df_relevant.columns:
+        st.warning(f"{cluster_column} tidak ditemukan di data. Silakan pastikan clustering dilakukan terlebih dahulu.")
+        return
+
+    # Memisahkan data berdasarkan cluster
+    unique_clusters = sorted(df_relevant[cluster_column].unique())
+    
+    # Fitur untuk dianalisis
+    features = [
+        "MODAL",
+        "OMSET PER BULAN",
+        "TENAGA KERJA",
+        "IZIN USAHA",
+        "MARKETPLACE",
+        "DATA PENDUDUK TIAP KECAMATAN"
+    ]
+    
+    # Siapkan struktur untuk tabel analisis
+    analysis_table = []
+
+    for cluster in unique_clusters:
+        cluster_data = df_relevant[df_relevant[cluster_column] == cluster]
+        
+        # Siapkan baris untuk kluster saat ini
+        row = {'CLUSTER': f"CLUSTER {cluster}"}
+        
+        # Untuk setiap fitur, hitung Min, Max, dan Rata-rata
+        for feature in features:
+            if feature in cluster_data.columns:
+                # If the feature is numeric, calculate the min, max, and mean
+                if cluster_data[feature].dtype in ['float64', 'int64']:
+                    row[f"{feature} MINIMAL"] = cluster_data[feature].min()
+                    row[f"{feature} MAKSIMAL"] = cluster_data[feature].max()
+                    row[f"{feature} RATA-RATA"] = cluster_data[feature].mean()
+                else:
+                    # If the feature is categorical, calculate the top values (like locations)
+                    row[f"{feature} Top Values"] = ", ".join(cluster_data[feature].value_counts().head(3).index)
+
+        # Tambahkan baris ke tabel analisis
+        analysis_table.append(row)
+
+    # Mengubah tabel analisis menjadi DataFrame
+    analysis_df = pd.DataFrame(analysis_table)
+
+    # Menerapkan beberapa format untuk kejelasan tampilan
+    formatted_df = analysis_df.copy()
+
+    # Mengubah format angka untuk kolom yang jenisnya numerik
+    for col in analysis_df.columns:
+        if 'MINIMAL' in col or 'MAKSIMAL' in col or 'RATA-RATA' in col:
+            formatted_df[col] = formatted_df[col].apply(lambda x: f"{x:,.0f}".replace(',', '.') if isinstance(x, (int, float)) else x)
+
+    st.write(formatted_df)
+
+def main():
+    st.sidebar.title("Sistem Clustering UMKM")
+    menu = [
+        "Dashboard",
+        "Masukkan Data",
+        "Preprocessing Data",
+        "Modeling & Evaluasi dengan Jarak Euclidean",
+        "Modeling & Evaluasi dengan Jarak Manhattan",
+        "Modeling & Evaluasi dengan Jarak Hamming",
+        "Analisa Setiap Clustering"
+    ]
+    choice = st.sidebar.radio("Pilih Menu", menu)
+
+    if choice == "Dashboard":
+        dashboard()
+    elif choice == "Masukkan Data":
+        df = upload_data()
+    elif choice == "Preprocessing Data":
+        df = preprocessing_data()
+    elif choice == "Modeling & Evaluasi dengan Jarak Euclidean":
+        if 'df' in st.session_state:
+            df = modeling(st.session_state.df, metric="euclidean")
+            evaluate_model(df, metric="euclidean")
+        else:
+            st.warning("Silakan upload dan proses data terlebih dahulu.")
+    elif choice == "Modeling & Evaluasi dengan Jarak Manhattan":
+        if 'df' in st.session_state:
+            df = modeling(st.session_state.df, metric="manhattan")
+            evaluate_model(df, metric="manhattan")
+        else:
+            st.warning("Silakan upload dan proses data terlebih dahulu.")
+    elif choice == "Modeling & Evaluasi dengan Jarak Hamming":
+        if 'df' in st.session_state:
+            df = modeling(st.session_state.df, metric="hamming")
+            evaluate_model(df, metric="hamming")
+        else:
+            st.warning("Silakan upload dan proses data terlebih dahulu.")
+    # elif choice == "Metode Klasifikasi":
+    #     evaluate_classification(st.session_state.df)
+    elif choice == "Analisa Setiap Clustering":
+        if 'df' in st.session_state:
+            metric = st.selectbox("Pilih Jarak untuk Analisa", ["euclidean", "manhattan", "hamming"])
+            analyze_clusters(st.session_state.df, metric)
+        else:
+            st.warning("Silakan lakukan clustering terlebih dahulu.")
+
+# Mengubah warna tombol setelah ditekan
+st.markdown("""<style> .stButton>button {background-color: #FFBD73;} </style>""", unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()
