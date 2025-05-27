@@ -223,7 +223,7 @@ def preprocessing_data():
         if st.button("Lakukan Outlier Handling"):
             # Pilih kolom numerik untuk Winsorization
             numerical_columns = df.select_dtypes(include=[np.number]).columns.tolist()
-            
+        
             # Winsorization pada kolom numerik
             df_winsorized = winsorize(df, numerical_columns, limits)
             
@@ -235,23 +235,27 @@ def preprocessing_data():
                 </div>
                 """ , unsafe_allow_html=True)
             st.write("")
-            st.write(outliers_info_before)
-
-            # Menampilkan jumlah outlier setelah Winsorization
-            outliers_info_after = get_outliers_info(df_winsorized, numerical_columns, limits)
-            st.markdown("""
-                <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
-                   <strong>&nbsp;&nbsp;Data outlier setelah Winsorization</strong>
-                </div>
-                """ , unsafe_allow_html=True)
+            st.dataframe(outliers_info_before)
             st.write("")
-            st.write(outliers_info_after)
+            st.dataframe(df)  # Menampilkan data asli sebelum Winsorization
 
             # Visualisasi Boxplot Sebelum dan Sesudah Winsorization
             fig, axes = plt.subplots(1, 2, figsize=(12, 6))
             sns.boxplot(data=df[numerical_columns], ax=axes[0])
             axes[0].set_title('Sebelum Winsorization')
             axes[0].tick_params(axis='x', rotation=45)
+
+            # Menampilkan jumlah outlier setelah Winsorization
+            outliers_info_after = get_outliers_info(df_winsorized, numerical_columns, limits)
+            st.markdown("""
+                <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+                   <strong>&nbsp;&nbsp;Data setelah Winsorization</strong>
+                </div>
+                """ , unsafe_allow_html=True)
+            st.write("")
+            st.dataframe(outliers_info_after)
+            st.write("")  # Spasi kosong untuk visualisasi
+            st.dataframe(df_winsorized)  # Menampilkan data setelah Winsorization
 
             sns.boxplot(data=df_winsorized[numerical_columns], ax=axes[1])
             axes[1].set_title('Setelah Winsorization')
@@ -261,7 +265,7 @@ def preprocessing_data():
             st.pyplot(fig)
 
             st.session_state.df = df_winsorized  # Menyimpan data setelah Winsorization
-
+            
     elif preprocess_option == "Normalisasi Data":
         st.write("### Normalisasi Data")
         if st.button("Lakukan Normalisasi MaxAbs"):
