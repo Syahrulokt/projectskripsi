@@ -404,9 +404,9 @@ def modeling(df, metric):
             data=df_tsne,
             alpha=0.7
         )
-        plt.title(f'Visualisasi 2D Clustering DBSCAN ({metric.capitalize()} Distance) dengan t-SNE')
-        plt.xlabel('t-SNE Komponen 1')
-        plt.ylabel('t-SNE Komponen 2')
+        plt.title(f'Visualisasi DBSCAN Clustering dengan {metric.capitalize()} Distance')
+        plt.xlabel('Komponen 1')
+        plt.ylabel('Komponen 2')
         plt.legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.grid(True)
         plt.tight_layout()
