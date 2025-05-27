@@ -11,8 +11,18 @@ from sklearn.metrics import silhouette_score, davies_bouldin_score
 def display_dataframe(df):
     st.write(df)
 
-# Halaman Dashboard
-def dashboard():
+# # Halaman beranda
+# def beranda():
+#     st.title("Selamat datang di sistem klasterisasi UMKM di kabupaten Sidoarjo menggunakan DBSCAN berbasis perbandingan jarak")
+#     st.write("""
+#         Project ini bertujuan untuk mengelompokkan Usaha Mikro, Kecil, dan Menengah (UMKM) di Kabupaten Sidoarjo dengan 
+#         menggunakan algoritma DBSCAN, yang berbasis pada pendekatan perbandingan jarak untuk mengidentifikasi pola dan 
+#         struktur dalam data. Project ini dikembangkan oleh Mochammad Syahrul Abidin sebagai bagian dari tugas akhir yang 
+#         di bombing oleh Dr. Yeni Kustiyahningsih, S.Kom., M.Kom, dan Eza Rahmanita, S.T., M.T yang memberikan arahan dalam 
+#         pengembangan sistem dan metodologi analisis data.
+#     """)
+
+def beranda():
     # Menampilkan judul dengan rata tengah
     st.markdown("""
         <h1 style="text-align: center; font-size: 50px">Sistem Klasterisasi UMKM di Kabupaten Sidoarjo menggunakan DBSCAN berbasis Perbandingan Jarak</h1>
@@ -24,7 +34,7 @@ def dashboard():
     """, unsafe_allow_html=True)
 
     # Menampilkan Gambar dari Folder ./dataset/
-    image_path = 'umkm.jpg'
+    image_path = './dataset/umkm.jpg'
     st.image(image_path, use_container_width=True)
 
     # Menambahkan garis
@@ -75,34 +85,39 @@ def upload_data():
     file = st.file_uploader("Pilih file .csv atau .xlsx", type=["csv", "xlsx"])
 
     if file is not None:
-        if file.name.endswith('.csv'):
-            df = pd.read_csv(file)
-        elif file.name.endswith('.xlsx'):
-            df = pd.read_excel(file)
+        try:
+            # Coba membaca file CSV dengan pemisah titik koma dan encoding ISO-8859-1
+            if file.name.endswith('.csv'):
+                df = pd.read_csv(file, sep=';', encoding='ISO-8859-1', on_bad_lines='skip')  # Menggunakan on_bad_lines
+            elif file.name.endswith('.xlsx'):
+                df = pd.read_excel(file)
 
-        # Menampilkan informasi dataset
-        st.markdown("""
-        <div style="background-color: #d0e7f7; font-size: 20px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
-            <strong>&nbsp;&nbsp;Informasi Dataset</strong>
-        </div>
-        """ , unsafe_allow_html=True)
-        st.markdown("" , unsafe_allow_html=True)
-        st.write()
-        st.write(f"Jumlah Baris: {df.shape[0]} data")
-        st.write(f"Jumlah Kolom: {df.shape[1]} kolom")
-        
-        # Menampilkan informasi kolom kategorikal dan numerik
-        categorical_columns = df.select_dtypes(include=['object']).columns
-        numerical_columns = df.select_dtypes(include=['number']).columns
+            # Menampilkan informasi dataset
+            st.markdown("""
+            <div style="background-color: #d0e7f7; font-size: 20px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+                <strong>&nbsp;&nbsp;Informasi Dataset</strong>
+            </div>
+            """ , unsafe_allow_html=True)
+            st.markdown("" , unsafe_allow_html=True)
+            st.write(f"Jumlah Baris: {df.shape[0]} data")
+            st.write(f"Jumlah Kolom: {df.shape[1]} kolom")
+            
+            # Menampilkan informasi kolom kategorikal dan numerik
+            categorical_columns = df.select_dtypes(include=['object']).columns
+            numerical_columns = df.select_dtypes(include=['number']).columns
 
-        st.write(f"Jumlah Kolom Kategorikal: {len(categorical_columns)} kolom")
-        st.write(f"Jumlah Kolom Numerik: {len(numerical_columns)} kolom")
+            st.write(f"Jumlah Kolom Kategorikal: {len(categorical_columns)} kolom")
+            st.write(f"Jumlah Kolom Numerik: {len(numerical_columns)} kolom")
 
-        display_dataframe(df)
-        
-        # Menyimpan dataframe di session state untuk digunakan di halaman lain
-        st.session_state.df = df
-        return df
+            display_dataframe(df)
+            
+            # Menyimpan dataframe di session state untuk digunakan di halaman lain
+            st.session_state.df = df
+            return df
+        except pd.errors.ParserError as e:
+            st.error(f"Terjadi kesalahan saat membaca file CSV: {e}")
+        except Exception as e:
+            st.error(f"Terjadi kesalahan: {e}")
     return None
 
 
@@ -331,21 +346,13 @@ def modeling(df, metric):
         return None
 
     # Input parameter DBSCAN
-    eps = st.slider("Pilih nilai eps", 0.1, 10.0, 0.5)
-    min_samples = st.slider("Pilih nilai minPts", 1, 100, 5)
+    eps = st.slider("Pilih nilai eps", 0.1, 1.0, 0.2)
+    min_samples = st.slider("Pilih nilai minPts", 1, 100, 49)
 
     # Melakukan clustering dengan DBSCAN
     if st.button(f"Lakukan Clustering menggunakan {metric} distance"):
         dbscan = DBSCAN(eps=eps, min_samples=min_samples, metric=metric.lower())
         clusters = dbscan.fit_predict(df_numeric)
-    
-    # # Tentukan nilai random_state untuk memastikan hasil yang konsisten
-    # random_state = 42 
-
-    # # Melakukan clustering dengan DBSCAN
-    # if st.button(f"Lakukan Clustering menggunakan {metric} distance"):
-    #     dbscan = DBSCAN(eps=eps, min_samples=min_samples, metric=metric.lower(), random_state=random_state)
-    #     clusters = dbscan.fit_predict(df_numeric)
 
         # Menambahkan hasil cluster ke data dengan nama kolom sesuai dengan jarak
         cluster_column_name = f"CLUSTER_{metric.upper()}"
@@ -376,41 +383,43 @@ def modeling(df, metric):
             st.write("")
             st.write(cluster_data)  # Menampilkan deskripsi statistik setiap cluster
 
-        # # Visualisasi hasil t-SNE
-        # tsne = TSNE(n_components=2, perplexity=60, n_iter=1000, metric=metric.lower(), random_state=42)
-        # tsne_result = tsne.fit_transform(df_normalized.select_dtypes(include=[np.number]))
+        # Visualisasi hasil t-SNE
+        tsne = TSNE(n_components=2, perplexity=60, n_iter=1000, metric=metric.lower(), random_state=42)
+        tsne_result = tsne.fit_transform(df_normalized.select_dtypes(include=[np.number]))
 
-        # # Masukkan hasil ke DataFrame untuk t-SNE
-        # df_tsne = pd.DataFrame(tsne_result, columns=['TSNE1', 'TSNE2'])
-        # df_tsne['Cluster'] = df_normalized[cluster_column_name]
+        # Masukkan hasil ke DataFrame untuk t-SNE
+        df_tsne = pd.DataFrame(tsne_result, columns=['TSNE1', 'TSNE2'])
+        df_tsne['Cluster'] = df_normalized[cluster_column_name]
 
-        # # Plot t-SNE
-        # plt.figure(figsize=(10, 6))
-        # sns.scatterplot(
-        #     x='TSNE1', y='TSNE2',
-        #     hue='Cluster',
-        #     palette='tab10',
-        #     data=df_tsne,
-        #     alpha=0.7
-        # )
-        # plt.title(f'Visualisasi 2D Clustering DBSCAN ({metric.capitalize()} Distance) dengan t-SNE')
-        # plt.xlabel('t-SNE Komponen 1')
-        # plt.ylabel('t-SNE Komponen 2')
-        # plt.legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
-        # plt.grid(True)
-        # plt.tight_layout()
-        # st.pyplot(plt)
+        # Plot t-SNE
+        plt.figure(figsize=(10, 6))
+        sns.scatterplot(
+            x='TSNE1', y='TSNE2',
+            hue='Cluster',
+            palette='tab10',
+            data=df_tsne,
+            alpha=0.7
+        )
+        plt.title(f'Visualisasi 2D Clustering DBSCAN ({metric.capitalize()} Distance) dengan t-SNE')
+        plt.xlabel('t-SNE Komponen 1')
+        plt.ylabel('t-SNE Komponen 2')
+        plt.legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.grid(True)
+        plt.tight_layout()
+        st.pyplot(plt)
 
         return df_normalized
     return None
 
+# Fungsi untuk mengevaluasi model
 def evaluate_model(df, metric):
     st.title(f"Evaluasi Hasil Clustering ({metric.capitalize()})")
     
     if df is not None:
         # Menentukan nama kolom cluster berdasarkan metric
         cluster_column = f"CLUSTER_{metric.upper()}"
-        
+
+        # Memastikan kolom cluster ada di dataframe
         if cluster_column not in df.columns:
             st.error(f"Kolom {cluster_column} tidak ada. Silakan lakukan clustering terlebih dahulu.")
             return None
@@ -510,8 +519,9 @@ def analyze_clusters(df, metric):
     if cluster_column not in df_relevant.columns:
         st.warning(f"{cluster_column} tidak ditemukan di data. Silakan pastikan clustering dilakukan terlebih dahulu.")
         return
-
-    # Memisahkan data berdasarkan cluster
+    
+     # Memisahkan data berdasarkan cluster, namun mengabaikan cluster -1 (outliers)
+    df_relevant = df_relevant[df_relevant[cluster_column] != -1]  # Menghilangkan outliers (Cluster -1)
     unique_clusters = sorted(df_relevant[cluster_column].unique())
     
     # Fitur untuk dianalisis
@@ -564,35 +574,35 @@ def analyze_clusters(df, metric):
 def main():
     st.sidebar.title("Sistem Clustering UMKM")
     menu = [
-        "Dashboard",
+        "Beranda",
         "Masukkan Data",
         "Preprocessing Data",
-        "Modeling & Evaluasi dengan Jarak Euclidean",
-        "Modeling & Evaluasi dengan Jarak Manhattan",
-        "Modeling & Evaluasi dengan Jarak Hamming",
+        "Modeling dan Evaluasi DBSCAN Clustering dengan Jarak Euclidean",
+        "Modeling dan Evaluasi DBSCAN Clustering dengan Jarak Manhattan",
+        "Modeling dan Evaluasi DBSCAN Clustering dengan Jarak Hamming",
         "Analisa Setiap Clustering"
     ]
     choice = st.sidebar.radio("Pilih Menu", menu)
 
-    if choice == "Dashboard":
-        dashboard()
+    if choice == "Beranda":
+        beranda()
     elif choice == "Masukkan Data":
         df = upload_data()
     elif choice == "Preprocessing Data":
         df = preprocessing_data()
-    elif choice == "Modeling & Evaluasi dengan Jarak Euclidean":
+    elif choice == "Modeling dan Evaluasi DBSCAN Clustering dengan Jarak Euclidean":
         if 'df' in st.session_state:
             df = modeling(st.session_state.df, metric="euclidean")
             evaluate_model(df, metric="euclidean")
         else:
             st.warning("Silakan upload dan proses data terlebih dahulu.")
-    elif choice == "Modeling & Evaluasi dengan Jarak Manhattan":
+    elif choice == "Modeling dan Evaluasi DBSCAN Clustering dengan Jarak Manhattan":
         if 'df' in st.session_state:
             df = modeling(st.session_state.df, metric="manhattan")
             evaluate_model(df, metric="manhattan")
         else:
             st.warning("Silakan upload dan proses data terlebih dahulu.")
-    elif choice == "Modeling & Evaluasi dengan Jarak Hamming":
+    elif choice == "Modeling dan Evaluasi DBSCAN Clustering dengan Jarak Hamming":
         if 'df' in st.session_state:
             df = modeling(st.session_state.df, metric="hamming")
             evaluate_model(df, metric="hamming")
