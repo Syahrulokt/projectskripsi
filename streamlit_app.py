@@ -347,7 +347,7 @@ def modeling(df, metric):
 
     # Input parameter DBSCAN
     eps = st.slider("Pilih nilai eps", 0.1, 1.0, 0.2)
-    min_samples = st.slider("Pilih nilai minPts", 1, 100, 49)
+    min_samples = st.slider("Pilih nilai minPts", 1, 100, 46)
 
     # Melakukan clustering dengan DBSCAN
     if st.button(f"Lakukan Clustering menggunakan {metric} distance"):
