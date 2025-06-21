@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.preprocessing import LabelEncoder
 from sklearn.cluster import DBSCAN
 from sklearn.manifold import TSNE
 from sklearn.metrics import silhouette_score, davies_bouldin_score
@@ -11,17 +12,7 @@ from sklearn.metrics import silhouette_score, davies_bouldin_score
 def display_dataframe(df):
     st.write(df)
 
-# # Halaman beranda
-# def beranda():
-#     st.title("Selamat datang di sistem klasterisasi UMKM di kabupaten Sidoarjo menggunakan DBSCAN berbasis perbandingan jarak")
-#     st.write("""
-#         Project ini bertujuan untuk mengelompokkan Usaha Mikro, Kecil, dan Menengah (UMKM) di Kabupaten Sidoarjo dengan 
-#         menggunakan algoritma DBSCAN, yang berbasis pada pendekatan perbandingan jarak untuk mengidentifikasi pola dan 
-#         struktur dalam data. Project ini dikembangkan oleh Mochammad Syahrul Abidin sebagai bagian dari tugas akhir yang 
-#         di bombing oleh Dr. Yeni Kustiyahningsih, S.Kom., M.Kom, dan Eza Rahmanita, S.T., M.T yang memberikan arahan dalam 
-#         pengembangan sistem dan metodologi analisis data.
-#     """)
-
+# Halaman beranda
 def beranda():
     # Menampilkan judul dengan rata tengah
     st.markdown("""
@@ -34,7 +25,7 @@ def beranda():
     """, unsafe_allow_html=True)
 
     # Menampilkan Gambar dari Folder ./dataset/
-    image_path = 'umkm.jpg'
+    image_path = './dataset/umkm.jpg'
     st.image(image_path, use_container_width=True)
 
     # Menambahkan garis
@@ -64,9 +55,6 @@ def beranda():
         4. **Analisa Klaster**: Lihat hasil analisis data.
     """)
     st.write("")
-    # # Tombol Mulai
-    # if st.button("Mulai Proses"):
-    #     st.write("Silakan lanjutkan ke menu untuk mengunggah data.")
 
     # Tentang Pengembang
     st.markdown("""
@@ -120,42 +108,41 @@ def upload_data():
             st.error(f"Terjadi kesalahan: {e}")
     return None
 
+# # Fungsi untuk menghitung jumlah outlier
+# def get_outliers_info(df, cols, limits):
+#     outliers_info = {}
+#     for col in cols:
+#         if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+#             q1, q3 = df[col].quantile([0.25, 0.75])
+#             iqr_val = q3 - q1
+#             lower_bound = q1 - limits * iqr_val
+#             upper_bound = q3 + limits * iqr_val
+#             lower_outliers = (df[col] < lower_bound).sum()
+#             upper_outliers = (df[col] > upper_bound).sum()
+#             total_outliers = lower_outliers + upper_outliers
+#             outliers_info[col] = {
+#                 'lower_outliers': lower_outliers,
+#                 'upper_outliers': upper_outliers,
+#                 'total_outliers': total_outliers
+#             }
+#     return outliers_info
 
-# Fungsi untuk Winsorization
-def winsorize(df, cols, limits):
-    df_winsorized = df.copy()
-    for col in cols:
-        if col in df_winsorized.columns and pd.api.types.is_numeric_dtype(df_winsorized[col]):
-            q1, q3 = df_winsorized[col].quantile([0.25, 0.75])
-            iqr_val = q3 - q1
-            lower_bound = q1 - limits * iqr_val
-            upper_bound = q3 + limits * iqr_val
-            df_winsorized[col] = np.clip(df_winsorized[col], lower_bound, upper_bound)
-        else:
-            print(f"Kolom '{col}' tidak ditemukan atau bukan numerik.")
-    return df_winsorized
+# # Fungsi untuk Winsorization
+# def winsorize(df, cols, limits):
+#     df_winsorized = df.copy()
+#     for col in cols:
+#         if col in df_winsorized.columns and pd.api.types.is_numeric_dtype(df_winsorized[col]):
+#             q1, q3 = df_winsorized[col].quantile([0.25, 0.75])
+#             iqr_val = q3 - q1
+#             lower_bound = q1 - limits * iqr_val
+#             upper_bound = q3 + limits * iqr_val
+#             df_winsorized[col] = np.clip(df_winsorized[col], lower_bound, upper_bound)
+#         else:
+#             print(f"Kolom '{col}' tidak ditemukan atau bukan numerik.")
+#     return df_winsorized
 
-# Menentukan nilai limits secara langsung
-limits = 1 
-
-# Fungsi untuk menghitung jumlah outlier
-def get_outliers_info(df, cols, limits):
-    outliers_info = {}
-    for col in cols:
-        if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
-            q1, q3 = df[col].quantile([0.25, 0.75])
-            iqr_val = q3 - q1
-            lower_bound = q1 - limits * iqr_val
-            upper_bound = q3 + limits * iqr_val
-            lower_outliers = (df[col] < lower_bound).sum()
-            upper_outliers = (df[col] > upper_bound).sum()
-            total_outliers = lower_outliers + upper_outliers
-            outliers_info[col] = {
-                'lower_outliers': lower_outliers,
-                'upper_outliers': upper_outliers,
-                'total_outliers': total_outliers
-            }
-    return outliers_info
+# # Menentukan nilai limits secara langsung untuk mengatur batas outlier
+# limits = 1 
 
 def preprocessing_data():
     st.title("Preprocessing Data")
@@ -171,7 +158,7 @@ def preprocessing_data():
     # Sub-menu untuk memilih langkah preprocessing menggunakan radio buttons
     preprocess_option = st.radio(
         "Pilih Langkah Preprocessing",
-        ["Transformasi Data", "Outlier Handling", "Normalisasi Data"]
+        ["Transformasi Data", "Normalisasi Data"]
     )
 
     # # Menambahkan tombol untuk setiap langkah preprocessing
@@ -190,82 +177,150 @@ def preprocessing_data():
     if preprocess_option == "Transformasi Data":
         st.write("### Transformasi Data")
         if st.button("Lakukan Transformasi Data"):
-            # Mengubah kolom "NO" menjadi tipe data object
-            if 'NO' in df.columns:
-                df["NO"] = df["NO"].astype(str)
+            # Memastikan data sudah diupload
+            if 'df' not in st.session_state:
+                st.warning("Silakan upload data terlebih dahulu di menu 'Masukkan Data'.")
+                return None
             
-            # Mengubah "Tidak ada" menjadi string kosong pada kolom 'IZIN USAHA' dan 'MARKETPLACE'
-            if 'IZIN USAHA' in df.columns:
-                df['IZIN USAHA'] = df['IZIN USAHA'].replace(["Tidak ada"], "0")
-            if 'MARKETPLACE' in df.columns:
-                df['MARKETPLACE'] = df['MARKETPLACE'].replace(["Tidak ada"], "0")
-            
-            # Menghitung jumlah izin dan jumlah marketplace setelah pemrosesan
-            if 'IZIN USAHA' in df.columns:
-                df['IZIN USAHA'] = df['IZIN USAHA'].apply(lambda x: len(x.split(',')) if isinstance(x, str) and x != "0" else 0)
-            if 'MARKETPLACE' in df.columns:
-                df['MARKETPLACE'] = df['MARKETPLACE'].apply(lambda x: len(x.split(',')) if isinstance(x, str) and x != "0" else 0)
-            
-            # Menyimpan salinan data asli
-            st.session_state.original_df = df.copy()
+            # Ambil data dari session state
+            df = df.copy()  # Salin dataframe utama
+            st.session_state.original_df = df.copy() # Menyimpan salinan data asli
+            # Mengubah kolom "DATA PENDUDUK TIAP KECAMATAN" menjadi tipe data object
+            if 'DATA PENDUDUK TIAP KECAMATAN' in df.columns:
+                df["DATA PENDUDUK TIAP KECAMATAN"] = df["DATA PENDUDUK TIAP KECAMATAN"].astype(str)
+            # Kolom yang akan ditransformasi
+            # target_cols = ['IZIN USAHA', 'MARKETPLACE', 'JENIS USAHA', 'KECAMATAN']
+
+            # Pra-pemrosesan: bersihkan teks
+            for col in df:
+                if col in df.columns:
+                    df[col] = df[col].replace("Tidak ada", "0")
+
+            # Simpan data sebelum transformasi
+            df_before = df.copy()
+
+            # Inisialisasi LabelEncoder
+            label_encoder = LabelEncoder()
+
+            # Transformasi dan buat mapping untuk setiap kolom
+            df['IZIN USAHA'] = label_encoder.fit_transform(df['IZIN USAHA'])
+            izin_mapping = dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_)))
+
+            df['MARKETPLACE'] = label_encoder.fit_transform(df['MARKETPLACE'])
+            marketplace_mapping = dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_)))
+
+            df['JENIS USAHA'] = label_encoder.fit_transform(df['JENIS USAHA'])
+            jenis_mapping = dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_)))
+
+            df['KECAMATAN'] = label_encoder.fit_transform(df['KECAMATAN'])
+            kecamatan_mapping = dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_)))
+
+            # Simpan ke session state
+            st.session_state.df = df # Menyimpan data setelah transformasi
+            st.session_state.df_before = df_before # Menyimpan data sebelum transformasi
+            # # Menyimpan salinan data asli
+            # st.session_state.original_df = df.copy()
+
+            # Tampilkan hasil transformasi
             st.markdown("""
                 <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
-                   <strong>&nbsp;&nbsp;Data setelah transformasi</strong>
+                <strong>&nbsp;&nbsp;Data setelah Label Encoding</strong>
                 </div>
-                """ , unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
             st.write("")
+            st.dataframe(df)
 
-            display_dataframe(df)
-            st.session_state.df = df  # Menyimpan data setelah transformasi
+            # Tampilkan mapping dalam expander
+            izin_df = pd.DataFrame(izin_mapping.items(), columns=['IZIN USAHA_before', 'IZIN USAHA_after'])
+            marketplace_df = pd.DataFrame(marketplace_mapping.items(), columns=['MARKETPLACE_before', 'MARKETPLACE_after'])
+            jenis_df = pd.DataFrame(jenis_mapping.items(), columns=['JENIS USAHA_before', 'JENIS USAHA_after'])
+            kecamatan_df = pd.DataFrame(kecamatan_mapping.items(), columns=['KECAMATAN_before', 'KECAMATAN_after'])
 
-    elif preprocess_option == "Outlier Handling":
-        st.write("### Outlier Handling")
-        if st.button("Lakukan Outlier Handling"):
-            # Pilih kolom numerik untuk Winsorization
-            numerical_columns = df.select_dtypes(include=[np.number]).columns.tolist()
+            with st.expander("Lihat Mapping Label Encoding"):
+                st.write("**IZIN USAHA:**")
+                st.dataframe(izin_df.drop_duplicates(subset='IZIN USAHA_after'))
+
+                st.write("**MARKETPLACE:**")
+                st.dataframe(marketplace_df.drop_duplicates(subset='MARKETPLACE_after'))
+
+                st.write("**JENIS USAHA:**")
+                st.dataframe(jenis_df.drop_duplicates(subset='JENIS USAHA_after'))
+
+                st.write("**KECAMATAN:**")
+                st.dataframe(kecamatan_df.drop_duplicates(subset='KECAMATAN_after'))
+                
+            # # Mengubah "Tidak ada" menjadi string kosong pada kolom 'IZIN USAHA' dan 'MARKETPLACE'
+            # if 'IZIN USAHA' in df.columns:
+            #     df['IZIN USAHA'] = df['IZIN USAHA'].replace(["Tidak ada"], "0")
+            # if 'MARKETPLACE' in df.columns:
+            #     df['MARKETPLACE'] = df['MARKETPLACE'].replace(["Tidak ada"], "0")
+            
+            # # Menghitung jumlah izin dan jumlah marketplace setelah pemrosesan
+            # if 'IZIN USAHA' in df.columns:
+            #     df['IZIN USAHA'] = df['IZIN USAHA'].apply(lambda x: len(x.split(',')) if isinstance(x, str) and x != "0" else 0)
+            # if 'MARKETPLACE' in df.columns:
+            #     df['MARKETPLACE'] = df['MARKETPLACE'].apply(lambda x: len(x.split(',')) if isinstance(x, str) and x != "0" else 0)
+            
+            # # Menyimpan salinan data asli
+            # st.session_state.original_df = df.copy()
+            # st.markdown("""
+            #     <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+            #        <strong>&nbsp;&nbsp;Data setelah transformasi</strong>
+            #     </div>
+            #     """ , unsafe_allow_html=True)
+            # st.write("")
+
+            # display_dataframe(df)
+            # st.session_state.df = df  # Menyimpan data setelah transformasi
+
+    # elif preprocess_option == "Outlier Handling":
+    #     st.write("### Outlier Handling")
+    #     if st.button("Lakukan Outlier Handling"):
+    #         # Pilih kolom numerik untuk Winsorization
+    #         numerical_columns = df.select_dtypes(include=[np.number]).columns.tolist()
         
-            # Winsorization pada kolom numerik
-            df_winsorized = winsorize(df, numerical_columns, limits)
+    #         # Winsorization pada kolom numerik
+    #         df_winsorized = winsorize(df, numerical_columns, limits)
             
-            # Menampilkan jumlah outlier sebelum Winsorization
-            outliers_info_before = get_outliers_info(df, numerical_columns, limits)
-            st.markdown("""
-                <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
-                   <strong>&nbsp;&nbsp;Data outlier sebelum Winsorization</strong>
-                </div>
-                """ , unsafe_allow_html=True)
-            st.write("")
-            st.dataframe(outliers_info_before)
-            st.write("")
-            st.dataframe(df)  # Menampilkan data asli sebelum Winsorization
+    #         # Menampilkan jumlah outlier sebelum Winsorization
+    #         outliers_info_before = get_outliers_info(df, numerical_columns, limits)
+    #         st.markdown("""
+    #             <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+    #                <strong>&nbsp;&nbsp;Data outlier sebelum Winsorization</strong>
+    #             </div>
+    #             """ , unsafe_allow_html=True)
+    #         st.write("")
+    #         st.dataframe(outliers_info_before)
+    #         st.write("")
+    #         st.dataframe(df)  # Menampilkan data asli sebelum Winsorization
 
-            # Visualisasi Boxplot Sebelum dan Sesudah Winsorization
-            fig, axes = plt.subplots(1, 2, figsize=(12, 6))
-            sns.boxplot(data=df[numerical_columns], ax=axes[0])
-            axes[0].set_title('Sebelum Winsorization')
-            axes[0].tick_params(axis='x', rotation=45)
+    #         # Visualisasi Boxplot Sebelum dan Sesudah Winsorization
+    #         fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    #         sns.boxplot(data=df[numerical_columns], ax=axes[0])
+    #         axes[0].set_title('Sebelum Winsorization')
+    #         axes[0].tick_params(axis='x', rotation=45)
 
-            # Menampilkan jumlah outlier setelah Winsorization
-            outliers_info_after = get_outliers_info(df_winsorized, numerical_columns, limits)
-            st.markdown("""
-                <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
-                   <strong>&nbsp;&nbsp;Data setelah Winsorization</strong>
-                </div>
-                """ , unsafe_allow_html=True)
-            st.write("")
-            st.dataframe(outliers_info_after)
-            st.write("")  # Spasi kosong untuk visualisasi
-            st.dataframe(df_winsorized)  # Menampilkan data setelah Winsorization
+    #         # Menampilkan jumlah outlier setelah Winsorization
+    #         outliers_info_after = get_outliers_info(df_winsorized, numerical_columns, limits)
+    #         st.markdown("""
+    #             <div style="background-color: #d0e7f7; font-size: 15px; padding-top: 7px; padding-bottom: 7px; padding-right: 7px; border-radius: 8px;">
+    #                <strong>&nbsp;&nbsp;Data setelah Winsorization</strong>
+    #             </div>
+    #             """ , unsafe_allow_html=True)
+    #         st.write("")
+    #         st.dataframe(outliers_info_after)
+    #         st.write("")  # Spasi kosong untuk visualisasi
+    #         st.dataframe(df_winsorized)  # Menampilkan data setelah Winsorization
 
-            sns.boxplot(data=df_winsorized[numerical_columns], ax=axes[1])
-            axes[1].set_title('Setelah Winsorization')
-            axes[1].tick_params(axis='x', rotation=45)
+    #         sns.boxplot(data=df_winsorized[numerical_columns], ax=axes[1])
+    #         axes[1].set_title('Setelah Winsorization')
+    #         axes[1].tick_params(axis='x', rotation=45)
 
-            plt.tight_layout()
-            st.pyplot(fig)
+    #         plt.tight_layout()
+    #         st.pyplot(fig)
 
-            st.session_state.df = df_winsorized  # Menyimpan data setelah Winsorization
-            
+    #         st.session_state.df = df_winsorized  # Menyimpan data setelah Winsorization
+
     elif preprocess_option == "Normalisasi Data":
         st.write("### Normalisasi Data")
         if st.button("Lakukan Normalisasi MaxAbs"):
@@ -351,7 +406,7 @@ def modeling(df, metric):
 
     # Input parameter DBSCAN
     eps = st.slider("Pilih nilai eps", 0.1, 1.0, 0.2)
-    min_samples = st.slider("Pilih nilai minPts", 1, 100, 46)
+    min_samples = st.slider("Pilih nilai minPts", 1, 100, 49)
 
     # Melakukan clustering dengan DBSCAN
     if st.button(f"Lakukan Clustering menggunakan {metric} distance"):
@@ -404,9 +459,9 @@ def modeling(df, metric):
             data=df_tsne,
             alpha=0.7
         )
-        plt.title(f'Visualisasi DBSCAN Clustering dengan {metric.capitalize()} Distance')
-        plt.xlabel('Komponen 1')
-        plt.ylabel('Komponen 2')
+        plt.title(f'Visualisasi 2D Clustering DBSCAN ({metric.capitalize()} Distance) dengan t-SNE')
+        plt.xlabel('t-SNE Komponen 1')
+        plt.ylabel('t-SNE Komponen 2')
         plt.legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.grid(True)
         plt.tight_layout()
@@ -535,7 +590,8 @@ def analyze_clusters(df, metric):
         "TENAGA KERJA",
         "IZIN USAHA",
         "MARKETPLACE",
-        "DATA PENDUDUK TIAP KECAMATAN"
+        "JENIS USAHA",
+        "KECAMATAN"
     ]
     
     # Siapkan struktur untuk tabel analisis
@@ -550,14 +606,14 @@ def analyze_clusters(df, metric):
         # Untuk setiap fitur, hitung Min, Max, dan Rata-rata
         for feature in features:
             if feature in cluster_data.columns:
-                # If the feature is numeric, calculate the min, max, and mean
+                # Jika fitur bersifat numerik, hitung min, max, dan rata-rata
                 if cluster_data[feature].dtype in ['float64', 'int64']:
                     row[f"{feature} MINIMAL"] = cluster_data[feature].min()
                     row[f"{feature} MAKSIMAL"] = cluster_data[feature].max()
                     row[f"{feature} RATA-RATA"] = cluster_data[feature].mean()
                 else:
-                    # If the feature is categorical, calculate the top values (like locations)
-                    row[f"{feature} Top Values"] = ", ".join(cluster_data[feature].value_counts().head(3).index)
+                    # Jika fitur bersifat kategorikal, hitung nilai-nilai terbanyak (seperti KECAMATAN)
+                    row[f"{feature} TERBANYAK"] = ", ".join(cluster_data[feature].value_counts().head(1).index)
 
         # Tambahkan baris ke tabel analisis
         analysis_table.append(row)
