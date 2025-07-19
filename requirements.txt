@@ -1,7 +1,6 @@
-streamlit
-numpy
-pandas
-openpyxl
-matplotlib
-seaborn
 scikit-learn
+scikit-learn-extra
+pandas
+numpy
+matplotlib
+streamlit
