@@ -4,8 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
-from sklearn.cluster import DBSCAN, KMeans
-from sklearn_extra.cluster import KMedoids
+from sklearn.cluster import DBSCAN, KMeans, KMedoids
 from sklearn.manifold import TSNE
 from sklearn.metrics import silhouette_score, davies_bouldin_score
 
