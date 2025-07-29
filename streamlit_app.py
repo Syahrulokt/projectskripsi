@@ -25,7 +25,7 @@ def beranda():
     """, unsafe_allow_html=True)
 
     # Menampilkan Gambar dari Folder ./dataset/
-    image_path = './dataset/umkm.jpg'
+    image_path = 'umkm.jpg'
     st.image(image_path, use_container_width=True)
 
     # Menambahkan garis
